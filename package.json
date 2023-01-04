@@ -1,0 +1,88 @@
+{
+  "name": "action-tracker",
+  "displayName": "Action Tracker",
+  "description": "",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.74.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "*"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "action-tracker.startTracking",
+        "title": "Track VSCode actions"
+      },
+      {
+        "command": "action-tracker.stopTracking",
+        "title": "Stop tracking VSCode actions"
+      }
+    ],
+    "configuration": {
+      "type": "object",
+      "title": "Action Tracker",
+      "properties": {
+        "action-tracker.ignoredActions": {
+          "type": "array",
+          "description": "Actions, containing any of the strings in this array, will not be displayed",
+          "title": "Ignored Actions",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "vim",
+            "wordHighlight"
+          ]
+        },
+        "action-tracker.logFolderPath": {
+          "type": "string",
+          "description": "Path to your VSCode logs folder",
+          "default": ""
+        },
+        "action-tracker.showInitMessage": {
+          "type": "boolean",
+          "description": "Show initial warning message, asking to set extension's configurations",
+          "default": "true"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run package",
+    "compile": "webpack",
+    "watch": "webpack --watch",
+    "package": "webpack --mode production --devtool hidden-source-map",
+    "compile-tests": "tsc -p . --outDir out",
+    "watch-tests": "tsc -p . -w --outDir out",
+    "pretest": "npm run compile-tests && npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.0.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "^17.0.29",
+    "@types/tail": "^2.2.1",
+    "@types/vscode": "^1.74.0",
+    "@typescript-eslint/eslint-plugin": "^5.45.0",
+    "@typescript-eslint/parser": "^5.45.0",
+    "@vscode/test-electron": "^2.2.0",
+    "eslint": "^8.28.0",
+    "glob": "^8.0.3",
+    "mocha": "^10.1.0",
+    "ts-loader": "^9.4.1",
+    "typescript": "^4.9.3",
+    "webpack": "^5.75.0",
+    "webpack-cli": "^5.0.0"
+  },
+  "dependencies": {
+    "@vscode/extension-telemetry": "^0.7.3-preview",
+    "tail": "^2.2.4"
+  }
+}
