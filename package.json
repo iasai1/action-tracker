@@ -1,7 +1,8 @@
 {
   "name": "action-tracker",
   "displayName": "Action Tracker",
-  "description": "",
+  "publisher": "iasai1",
+  "description": "Extension that displays VSCode actions IDs upon execution",
   "version": "0.0.1",
   "repository": {
     "type": "git",
