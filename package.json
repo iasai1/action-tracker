@@ -3,6 +3,10 @@
   "displayName": "Action Tracker",
   "description": "",
   "version": "0.0.1",
+  "repository": {
+    "type": "git",
+    "url" : "https://github.com/iasai1/action-tracker"
+  },
   "engines": {
     "vscode": "^1.74.0"
   },
