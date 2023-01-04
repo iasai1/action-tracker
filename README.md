@@ -2,7 +2,7 @@
 
 ## Summary
 
-Action Tracker is a VSCode Extension that allows You to see what VSCode actions you execute! 
+Action Tracker is a VSCode Extension that allows You to see what VSCode actions You execute! 
 Inspired by JetBrain's Track Actions functionality, this extension will be usefull for anyone who is looking to learn IDE Actions while coding.
 Knowing each Action's ID, it is then easy to assign Your own shortcut for it
 
