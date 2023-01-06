@@ -7,13 +7,18 @@ import * as path from 'path';
  * telemetry.log file listener
  * Listens for appends to the file and handles them
  */
-let telemetryTail: tail.Tail;
+let telemetryTail: tail.Tail | undefined;
 
 /**
  * Global extension configuration object
  * This is asynchronously updated by a vscode.workspace.onDidConfigurationChange()
  */
 let configuration: vscode.WorkspaceConfiguration;
+
+/**
+ * constant for empty results
+ */
+const NONE = "_NONE";
 
 /**
  * This function parses a telemetry.log line and, if it is an action log, picks out executed action's id
@@ -49,7 +54,7 @@ function parseTelemetry(telemetryLine: String, ignoredActions: string[]) {
 
 	// check if this is an action entry
 	// it is always between the log level and start of telemetry JSON
-	let actionType = "_NONE";
+	let actionType = NONE;
 	let lineType = stripped25.substring(7, stripped25.indexOf("{"));
 
 	console.log(lineType);
@@ -90,35 +95,87 @@ function parseTelemetry(telemetryLine: String, ignoredActions: string[]) {
 }
 
 /**
- * private function for cotext configuration upon having a correct configuration
+ * This function configures tail.Tail to read telemetry logs
  * 
- * @param context VSCode context
- * @param telemetryLogPath path to telemetry.log file to monitor
+ * @param config extension configuration snapshot
+ * @returns true if tail.Tail was succefully initialized; false otherwise
  */
-function configureContext(context: vscode.ExtensionContext, telemetryLogPath: string) {
-	const ignoredActions: string[] = configuration.get("ignoredActions", ["vim", "wordHighlight"]);
-	const showInitMessage: boolean = configuration.get("showInitMessage", true);
+function init(config: vscode.WorkspaceConfiguration): boolean {
+
+	const vscodeLogsFolderPath: string = config.get("logFolderPath", NONE);
+
+	// validate configuration
+	if (vscodeLogsFolderPath === NONE) {
+		vscode.window.showErrorMessage("Log Folder Path setting is not set. \nPlease, update configuration and reload the extension");
+		return false;
+	}
+
+	// open the most recent log folder and configure extension to read logs from there
+	let files: fs.Dirent[];
+	try {	
+		files = fs.readdirSync(vscodeLogsFolderPath, { withFileTypes: true, });
+	} catch (e) {
+		console.log("Error opening log folder: " + e);
+		vscode.window.showErrorMessage("Log Folder Path is not correctly set: error opening folder. \nPlease, update configuration and reload the extension");
+		return false;
+	}
+
+	// find most recent folder
+	let mostRecentLogFolder = NONE;
+	let fileStat;
+	let latestCreationTime = -1;
+	files.forEach((file, _) => {
+		if (file.isDirectory()) {
+			fileStat = fs.statSync(path.join(vscodeLogsFolderPath, file.name));
+			if (fileStat.ctimeMs > latestCreationTime) {
+				mostRecentLogFolder = file.name;
+				latestCreationTime = fileStat.ctimeMs;
+			}
+		}
+	});
+	
+	// in case no folders were found
+	if (mostRecentLogFolder === NONE) {
+		vscode.window.showErrorMessage("Log Folder Path is not correctly set: no folders present inside. \nPlease, update configuration and reload the extension");
+		return false;
+	}
 
 	// init log listener 
+	const telemetryLogPath = vscodeLogsFolderPath + "/" + mostRecentLogFolder + "/telemetry.log";
 	try {
 		const options = { separator: /[\r]{0,1}\n/, fromBeginning: false, fsWatchOptions: {}, follow: true, logger: console };
 		telemetryTail = new tail.Tail(telemetryLogPath, options);
 	} catch (e) {
 		console.log(e);
-		vscode.window.showErrorMessage("Action Tracker: Error opening telemetry.log. \nPlease make sure the log folder path configuration is correct");
+		vscode.window.showErrorMessage("Error opening telemetry.log. \nPlease make sure the log folder path configuration is correct");
+		return false;
 	}
-	telemetryTail.on("error", (e) => console.log('ERROR: ', e));
-	telemetryTail.on('line', (line: String) => parseTelemetry(line, ignoredActions));
+	telemetryTail?.on("error", (e) => console.log('ERROR: ', e));
+	telemetryTail?.on('line', (line: String) => parseTelemetry(line, configuration.get("ignoredActions", ["vim", "wordHighlight"])));
 
+	return true;
+}
+
+export function activate(context: vscode.ExtensionContext) {
+
+	configuration = vscode.workspace.getConfiguration("action-tracker");
+	const showInitMessage: boolean = configuration.get("showInitMessage", true);
 
 	// register commands
 	let startTracking = vscode.commands.registerCommand('action-tracker.startTracking', () => {
-		telemetryTail.watch();
-		vscode.window.showInformationMessage("Started tracking VSCode actions! \nYou can configure actions to ignore in the extension configuration");
+		let isTelemetryTailInit = true;
+		if (!telemetryTail) {
+			isTelemetryTailInit = init(configuration);
+		} 
+
+		if (isTelemetryTailInit) {
+			telemetryTail?.watch();
+			vscode.window.showInformationMessage("Started tracking VSCode actions! \nYou can configure actions to ignore in the extension configuration");
+		}
 	});
 
 	let stopTracking = vscode.commands.registerCommand('action-tracker.stopTracking', () => {
-		telemetryTail.unwatch();
+		telemetryTail?.unwatch();
 		vscode.window.showInformationMessage("Stopped tracking VSCode actions");
 	});
 
@@ -127,53 +184,15 @@ function configureContext(context: vscode.ExtensionContext, telemetryLogPath: st
 
 	// register configuration updates listener
 	context.subscriptions.push(vscode.workspace.onDidChangeConfiguration((_) => configuration = vscode.workspace.getConfiguration("action-tracker")));
-	
+
 	// show init message 
 	if (showInitMessage) {
-		vscode.window.showWarningMessage("Action Tracker extension relies on VSCode's Telemetry logs.\nPlease make sure Telemetry logs at \*trace\* level");
+		vscode.window.showWarningMessage("Action Tracker extension relies on VSCode's Telemetry logs.\nPlease make sure Telemetry logs are at \*trace\* level");
 		vscode.window.showWarningMessage("VSCode creates a log folder per day. \nIf Action Tracker stopped showing messages - reboot VSCode or restart the extension");
-	}
-}
-
-export function activate(context: vscode.ExtensionContext) {
-
-	configuration = vscode.workspace.getConfiguration("action-tracker");
-	const vscodeLogsFolderPath: string = configuration.get("logFolderPath", "_NONE");
-
-	// validate configuration
-	if (vscodeLogsFolderPath === "_NONE") {
-		vscode.window.showErrorMessage("Action Tracker: Log Folder Path setting is not set. \nPlease, update configuration and reload the extension");
-
-	} else {
-
-		// open the most recent log folder and configure extension to read logs from there
-		fs.readdir(vscodeLogsFolderPath, { withFileTypes: true, }, (e, files) => {
-			if (e) {
-				console.log("Error opening log folder: " + e);
-				vscode.window.showErrorMessage("Action Tracker: Log Folder Path is not correctly set: error opening folder. \nPlease, update configuration and reload the extension");
-				return;
-			}
-
-			let mostRecentLogFolder;
-			let fileStat;
-			let latestCreationTime = -1;
-			files.forEach((file, _) => {
-				if (file.isDirectory()) {
-					fileStat = fs.statSync(path.join(vscodeLogsFolderPath, file.name));
-					if (fileStat.ctimeMs > latestCreationTime) {
-						mostRecentLogFolder = file.name;
-						latestCreationTime = fileStat.ctimeMs;
-					}
-				}
-			});
-
-			const telemetryLogPath = vscodeLogsFolderPath + "/" + mostRecentLogFolder + "/telemetry.log";
-			configureContext(context, telemetryLogPath);
-		});
 	}
 }
 
 // This method is called when your extension is deactivated
 export function deactivate() {
-	telemetryTail.unwatch();
+	telemetryTail?.unwatch();
 }
